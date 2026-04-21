@@ -1,6 +1,6 @@
 # Log Analysis
 
-Go log query web server with bash extraction script.
+Go log query web server with bash extraction script and project management.
 
 ## Commands
 
@@ -24,6 +24,13 @@ Avoid 8080/8089/9999 (Windows conflicts).
 - `/api/log_types` → `{log_types: [...], dates: [...]}`
 - `/api/query?log_type=sys-info&start_time=09:00:00.000&end_time=12:00:00.000&date=2026-04-19`
 - `/api/log_content?filename=...&date=...&start_time=...&end_time=...&keyword=error`
+- `/api/projects` → CRUD for project configs (POST/GET/PUT/DELETE)
+
+## Project Management
+
+- Web UI: `/settings.html` for adding/editing/deleting projects
+- Project fields: `{id, name, log_dir, index_file}` (index_file defaults to `time_ranges.json`)
+- Index files: Time ranges stored in `{log_dir}/time_ranges.json`
 
 ## Time Range Matching
 
@@ -37,5 +44,8 @@ Overlap matching: `entryFirst <= queryEnd && entryLast >= queryStart`. See `main
 
 ## Frontend
 
-- Static in `public/`: `index.html` (dark theme), `style.css`
-- Features: file list, log viewer, time filter, keyword search, maximize
+- Static in `public/`:
+  - `index.html` - log analysis interface (dark theme)
+  - `settings.html` - project management
+  - `style.css` - shared styling
+- Features: file list, log viewer, time filter, keyword search, maximize, project CRUD
