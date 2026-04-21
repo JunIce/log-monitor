@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"embed"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -15,6 +16,9 @@ import (
 	"strings"
 	"time"
 )
+
+//go:embed public
+var publicFS embed.FS
 
 type TimeRangeJSON struct {
 	GeneratedAt string     `json:"generated_at"`
@@ -776,9 +780,7 @@ func main() {
 	log.Printf("Server starting on port %s", config.Port)
 
 	cwd, _ := os.Getwd()
-	publicDir := filepath.Join(cwd, "public")
-	indexPath := filepath.Join(cwd, "public", "index.html")
-	log.Printf("Public dir: %s, Index: %s", publicDir, indexPath)
+	log.Printf("Working dir: %s", cwd)
 
 	defaultMux := http.NewServeMux()
 
@@ -812,16 +814,25 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
-	defaultMux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join(cwd, "public")))))
+	defaultMux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(publicFS))))
+
+	defaultMux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
+		data, err := publicFS.ReadFile("settings.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write(data)
+	})
 
 	defaultMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Request path: %s", r.URL.Path)
-		path := r.URL.Path
-		if path == "/settings" {
-			http.ServeFile(w, r, filepath.Join(cwd, "public", "settings.html"))
-		} else {
-			http.ServeFile(w, r, indexPath)
+		data, err := publicFS.ReadFile("index.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
 		}
+		w.Write(data)
 	})
 
 	log.Fatal(http.ListenAndServe(":"+config.Port, defaultMux))

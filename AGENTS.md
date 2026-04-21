@@ -2,6 +2,11 @@
 
 Go log query web server with bash extraction script and project management.
 
+## Build Notes
+
+- Public directory is embedded at compile time via `//go:embed public`
+- Binary is self-contained, no external files needed at runtime
+
 ## Commands
 
 ```bash

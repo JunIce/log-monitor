@@ -47,5 +47,6 @@ jobs:
             log-server-windows-amd64.exe
             log-server-linux-amd64
             log-server-darwin-amd64
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
