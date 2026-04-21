@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div style="display:flex;align-items:center;gap:12px">
+                <div class="logo">Log Analyzer</div>
+                <h1>日志查询系统</h1>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px">
+                <button class="header-link" onclick="toggleTheme()" id="themeToggle" title="切换主题">☀️</button>
+                <a href="/settings" class="header-link" title="设置">⚙️</a>
+            </div>
+        </header>
+
+        <div class="search-panel">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>项目</label>
+                    <select id="projectSelect" onchange="onProjectChange()">
+                        <option value="">请选择项目</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>日志类型</label>
+                    <select id="logType">
+                        <option value="">全部类型</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>日期</label>
+                    <select id="date">
+                        <option value="">全部日期</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>开始时间</label>
+                    <input type="time" id="startTime" step="3600" value="">
+                </div>
+                <div class="form-group">
+                    <label>结束时间</label>
+                    <input type="time" id="endTime" step="3600" value="">
+                </div>
+                <div class="btn-group" style="flex:0;gap:8px">
+                    <button class="btn btn-secondary" onclick="resetForm()" style="padding:8px 16px">重置</button>
+                    <button class="btn btn-primary" onclick="searchLogs()" style="padding:8px 20px">查询</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="results-panel">
+                    <div class="results-header">
+                        <div class="results-count">找到 <span id="totalCount">0</span> 个匹配的日志文件</div>
+                    </div>
+                    <div class="results-list" id="resultsList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📋</div>
+                            <p>请选择条件进行查询</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="right-panel">
+                <div class="log-viewer" id="logViewer">
+                    <div class="log-viewer-header">
+                        <div class="log-viewer-title" id="viewerTitle">日志内容</div>
+                        <div style="display:flex;gap:8px">
+                            <button class="log-viewer-close" onclick="toggleMaximize()" title="最大化">⛶</button>
+                            <button class="log-viewer-close" onclick="closeViewer()">&times;</button>
+                        </div>
+                    </div>
+                    <div class="log-viewer-controls">
+                        <input type="number" id="startLine" placeholder="跳转行" value="" min="1" style="width:80px">
+                        <button class="btn btn-secondary" onclick="jumpToLine()" style="padding:8px 16px;font-size:12px">跳转</button>
+                        <input type="text" id="logKeyword" placeholder="搜索关键词" style="flex:1;width:auto">
+                        <button class="btn btn-primary" onclick="searchLog()" style="padding:8px 16px;font-size:12px">搜索</button>
+                    </div>
+                    <div class="log-content" id="logContent">
+                        <div class="loading">
+                            <div class="loading-spinner"></div>
+                            <p>加载中...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API_BASE = '';
+        const PAGE_SIZE = 100;
+        let currentFiles = [];
+        let currentFile = null;
+        let loadedLines = [];
+        let currentProject = null;
+
+        async function init() {
+            loadTheme();
+            await loadProjects();
+        }
+
+        async function loadProjects() {
+            try {
+                const res = await fetch(`${API_BASE}/api/projects`);
+                const data = await res.json();
+                
+                const projectSelect = document.getElementById('projectSelect');
+                (data.projects || []).forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = JSON.stringify(p);
+                    opt.textContent = p.name;
+                    projectSelect.appendChild(opt);
+                });
+                
+                if (data.projects && data.projects.length > 0) {
+                    projectSelect.value = JSON.stringify(data.projects[0]);
+                    currentProject = data.projects[0];
+                    await loadLogTypes();
+                }
+            } catch (e) {
+                showToast('加载项目失败: ' + e.message);
+            }
+        }
+
+        function onProjectChange() {
+            const select = document.getElementById('projectSelect');
+            const value = select.value;
+            if (value) {
+                currentProject = JSON.parse(value);
+                loadLogTypes();
+            } else {
+                currentProject = null;
+            }
+            resetForm();
+        }
+
+        async function loadLogTypes() {
+            if (!currentProject) return;
+            
+            try {
+                const params = new URLSearchParams({
+                    log_dir: currentProject.log_dir,
+                    index_file: currentProject.index_file
+                });
+                const res = await fetch(`${API_BASE}/api/log_types?${params}`);
+                const data = await res.json();
+
+                const logTypeSelect = document.getElementById('logType');
+                logTypeSelect.innerHTML = '<option value="">全部类型</option>';
+                data.log_types.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t;
+                    opt.textContent = t;
+                    logTypeSelect.appendChild(opt);
+                });
+
+                const dateInput = document.getElementById('date');
+                dateInput.innerHTML = '<option value="">全部日期</option>';
+                data.dates.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d;
+                    opt.textContent = d;
+                    dateInput.appendChild(opt);
+                });
+            } catch (e) {
+                showToast('加载配置失败: ' + e.message);
+            }
+        }
+
+        async function searchLogs() {
+            if (!currentProject) {
+                showToast('请先选择项目');
+                return;
+            }
+
+            const logType = document.getElementById('logType').value;
+            const date = document.getElementById('date').value;
+            let startTime = document.getElementById('startTime').value;
+            let endTime = document.getElementById('endTime').value;
+
+            if (startTime) startTime = startTime + ':00.000';
+            if (endTime) endTime = endTime + ':00.000';
+
+            const params = new URLSearchParams();
+            params.append('log_dir', currentProject.log_dir);
+            params.append('index_file', currentProject.index_file);
+            if (logType) params.append('log_type', logType);
+            if (date) params.append('date', date);
+            if (startTime) params.append('start_time', startTime);
+            if (endTime) params.append('end_time', endTime);
+            params.append('limit', '50');
+
+            try {
+                const res = await fetch(`${API_BASE}/api/query?${params}`);
+                const data = await res.json();
+
+                currentFiles = data.matched_files || [];
+                document.getElementById('totalCount').textContent = data.total;
+                renderResults(currentFiles);
+            } catch (e) {
+                showToast('查询失败: ' + e.message);
+            }
+        }
+
+        function renderResults(files) {
+            const container = document.getElementById('resultsList');
+
+            if (!files || files.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔍</div>
+                        <p>未找到匹配的日志文件</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = files.map((f, i) => {
+                const shortName = f.filename.replace(f.log_type + '.' + f.date + '.', '').replace('.log', '');
+                return `
+                <div class="result-item" onclick="openViewer('${f.date}', '${f.filename}')" title="${f.filename}" style="animation-delay: ${i * 0.05}s">
+                    <div class="result-filename">${shortName}</div>
+                    <div class="result-type type-${f.log_type}">${f.log_type}</div>
+                    <div class="result-time">${f.time_range}</div>
+                </div>
+            `}).join('');
+        }
+
+        function openViewer(date, filename) {
+            currentFile = { date, filename };
+            loadedLines = [];
+            document.getElementById('viewerTitle').textContent = filename;
+            document.getElementById('logViewer').classList.add('active');
+            const startLineInput = document.getElementById('startLine');
+            if (startLineInput) startLineInput.value = 1;
+            document.getElementById('logKeyword').value = '';
+            
+            document.querySelectorAll('.result-item').forEach(item => item.classList.remove('selected'));
+            const items = document.querySelectorAll('.result-item');
+            for (let i = 0; i < items.length; i++) {
+                const f = currentFiles[i];
+                if (f && f.date === date && f.filename === filename) {
+                    items[i].classList.add('selected');
+                    break;
+                }
+            }
+            
+            loadLogContent();
+        }
+
+        function closeViewer() {
+            document.getElementById('logViewer').classList.remove('active');
+            document.getElementById('logViewer').classList.remove('maximized');
+            currentFile = null;
+            loadedLines = [];
+        }
+
+        function toggleMaximize() {
+            document.getElementById('logViewer').classList.toggle('maximized');
+        }
+
+        async function loadLogContent(more = false) {
+            if (!currentFile) return;
+
+            let startLine;
+            if (more) {
+                startLine = loadedLines.length + 1;
+            } else {
+                startLine = parseInt(document.getElementById('startLine')?.value) || 1;
+                loadedLines = [];
+            }
+            const endLine = startLine + PAGE_SIZE - 1;
+
+            let startTime = document.getElementById('startTime').value;
+            let endTime = document.getElementById('endTime').value;
+            if (startTime) startTime = startTime + ':00.000';
+            if (endTime) endTime = endTime + ':00.000';
+
+            const params = new URLSearchParams({
+                date: currentFile.date,
+                filename: currentFile.filename,
+                start_line: startLine,
+                end_line: endLine,
+                log_dir: currentProject.log_dir
+            });
+            if (startTime) params.set('start_time', startTime);
+            if (endTime) params.set('end_time', endTime);
+
+            const container = document.getElementById('logContent');
+            if (!more) {
+                container.innerHTML = `
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        <p>加载中...</p>
+                    </div>
+                `;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/api/log_content?${params}`);
+                const data = await res.json();
+
+                const newLines = data.lines.map(line => {
+                    let cls = 'info';
+                    if (line.content.includes('ERROR')) cls = 'error';
+                    else if (line.content.includes('WARN')) cls = 'warn';
+                    else if (line.content.includes('DEBUG')) cls = 'debug';
+
+                    return `<div class="log-line ${cls}">
+                        <div class="log-line-num">${line.line_num}</div>
+                        <div class="log-line-content">${escapeHtml(line.content)}</div>
+                    </div>`;
+                });
+
+                if (more) {
+                    loadedLines = [...loadedLines, ...newLines];
+                } else {
+                    loadedLines = newLines;
+                }
+
+                const loadMoreBtn = data.lines.length === PAGE_SIZE 
+                    ? `<button class="load-more-btn" onclick="loadLogContent(true)">加载更多 ▼</button>` 
+                    : '';
+
+                const headerHtml = !more && data.total > 0 
+                    ? `<div class="results-count" style="padding:8px 16px;border-bottom:1px solid var(--border-color);font-size:11px">共 ${data.total} 行</div>` 
+                    : '';
+
+                container.innerHTML = headerHtml + loadedLines.join('') + loadMoreBtn;
+
+                if (data.lines.length === 0 && !more) {
+                    container.innerHTML = '<div class="empty-state"><p>该范围内没有日志内容</p></div>';
+                }
+            } catch (e) {
+                container.innerHTML = `<div class="empty-state"><p>加载失败: ${e.message}</p></div>`;
+            }
+        }
+
+        function searchLog() {
+            const keyword = document.getElementById('logKeyword').value.trim();
+            if (!keyword) {
+                showToast('请输入搜索关键词');
+                return;
+            }
+            loadedLines = [];
+            loadLogContentWithKeyword(keyword);
+        }
+
+        async function loadLogContentWithKeyword(keyword) {
+            if (!currentFile) return;
+
+            let startTime = document.getElementById('startTime').value;
+            let endTime = document.getElementById('endTime').value;
+            if (startTime) startTime = startTime + ':00.000';
+            if (endTime) endTime = endTime + ':00.000';
+
+            const params = new URLSearchParams({
+                date: currentFile.date,
+                filename: currentFile.filename,
+                keyword: keyword,
+                start_line: 1,
+                end_line: 500,
+                log_dir: currentProject.log_dir
+            });
+            if (startTime) params.set('start_time', startTime);
+            if (endTime) params.set('end_time', endTime);
+
+            const container = document.getElementById('logContent');
+            container.innerHTML = `
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>搜索中...</p>
+                </div>
+            `;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/log_content?${params}`);
+                const data = await res.json();
+
+                loadedLines = data.lines.map(line => {
+                    let cls = 'info';
+                    if (line.content.includes('ERROR')) cls = 'error';
+                    else if (line.content.includes('WARN')) cls = 'warn';
+                    else if (line.content.includes('DEBUG')) cls = 'debug';
+
+                    let content = escapeHtml(line.content);
+                    const keywordLower = keyword.toLowerCase();
+                    const contentLower = line.content.toLowerCase();
+                    let idx = contentLower.indexOf(keywordLower);
+                    while (idx !== -1) {
+                        const before = content.substring(0, idx);
+                        const match = content.substring(idx, idx + keyword.length);
+                        const after = content.substring(idx + keyword.length);
+                        content = before + '<span class="highlight">' + match + '</span>' + after;
+                        idx = contentLower.indexOf(keywordLower, idx + keyword.length + 31);
+                    }
+
+                    return `<div class="log-line ${cls}">
+                        <div class="log-line-num">${line.line_num}</div>
+                        <div class="log-line-content">${content}</div>
+                    </div>`;
+                });
+
+                const loadMoreBtn = data.lines.length === PAGE_SIZE 
+                    ? `<button class="load-more-btn" onclick="loadLogContent(true)">加载更多 ▼</button>` 
+                    : '';
+
+                container.innerHTML = loadedLines.join('') + loadMoreBtn;
+
+                if (data.lines.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>未找到匹配结果</p></div>';
+                }
+            } catch (e) {
+                container.innerHTML = `<div class="empty-state"><p>搜索失败: ${e.message}</p></div>`;
+            }
+        }
+
+        function jumpToLine() {
+            const lineNum = parseInt(document.getElementById('startLine').value);
+            if (!lineNum || lineNum < 1) {
+                showToast('请输入有效行号');
+                return;
+            }
+            loadedLines = [];
+            loadLogContentAt(lineNum);
+        }
+
+        async function loadLogContentAt(startLine) {
+            if (!currentFile) return;
+
+            const endLine = startLine + PAGE_SIZE - 1;
+            let startTime = document.getElementById('startTime').value;
+            let endTime = document.getElementById('endTime').value;
+            if (startTime) startTime = startTime + ':00.000';
+            if (endTime) endTime = endTime + ':00.000';
+
+            const params = new URLSearchParams({
+                date: currentFile.date,
+                filename: currentFile.filename,
+                start_line: startLine,
+                end_line: endLine,
+                log_dir: currentProject.log_dir
+            });
+            if (startTime) params.set('start_time', startTime);
+            if (endTime) params.set('end_time', endTime);
+
+            const container = document.getElementById('logContent');
+            container.innerHTML = `
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>加载中...</p>
+                </div>
+            `;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/log_content?${params}`);
+                const data = await res.json();
+
+                loadedLines = data.lines.map(line => {
+                    let cls = 'info';
+                    if (line.content.includes('ERROR')) cls = 'error';
+                    else if (line.content.includes('WARN')) cls = 'warn';
+                    else if (line.content.includes('DEBUG')) cls = 'debug';
+
+                    return `<div class="log-line ${cls}">
+                        <div class="log-line-num">${line.line_num}</div>
+                        <div class="log-line-content">${escapeHtml(line.content)}</div>
+                    </div>`;
+                });
+
+                const loadMoreBtn = data.lines.length === PAGE_SIZE 
+                    ? `<button class="load-more-btn" onclick="loadLogContent(true)">加载更多 ▼</button>` 
+                    : '';
+
+                const headerHtml = !more && data.total > 0 
+                    ? `<div class="results-count" style="padding:8px 16px;border-bottom:1px solid var(--border-color);font-size:11px">共 ${data.total} 行</div>` 
+                    : '';
+
+                container.innerHTML = headerHtml + loadedLines.join('') + loadMoreBtn;
+            } catch (e) {
+                container.innerHTML = `<div class="empty-state"><p>加载失败: ${e.message}</p></div>`;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function resetForm() {
+            document.getElementById('logType').value = '';
+            document.getElementById('date').value = '';
+            document.getElementById('startTime').value = '';
+            document.getElementById('endTime').value = '';
+            document.getElementById('resultsList').innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📋</div>
+                    <p>请选择条件进行查询</p>
+                </div>
+            `;
+            document.getElementById('totalCount').textContent = '0';
+            closeViewer();
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('light-mode');
+            const isLight = document.body.classList.contains('light-mode');
+            document.getElementById('themeToggle').textContent = isLight ? '🌙' : '☀️';
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        }
+
+        function loadTheme() {
+            const saved = localStorage.getItem('theme');
+            if (saved === 'light') {
+                document.body.classList.add('light-mode');
+                document.getElementById('themeToggle').textContent = '🌙';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

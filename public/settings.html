@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>项目设置 - Log Analysis</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body {
+            background: var(--bg-primary);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .settings-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .settings-header h1 {
+            color: var(--text-primary);
+            margin: 0;
+        }
+        .back-link {
+            color: var(--accent-primary);
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 1px solid var(--accent-primary);
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .back-link:hover {
+            background: var(--accent-primary);
+            color: white;
+        }
+        .card {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border-color);
+        }
+        .card h2 {
+            color: var(--text-primary);
+            margin: 0 0 16px 0;
+            font-size: 18px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+        .form-group label {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+        .form-group input {
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: var(--accent-primary);
+            color: white;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            opacity: 0.9;
+        }
+        .btn-primary {
+            background: var(--accent-primary);
+            color: white;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        .projects-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .projects-table th,
+        .projects-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .projects-table th {
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 14px;
+        }
+        .projects-table td {
+            color: var(--text-primary);
+        }
+        .projects-table tr:hover {
+            background: var(--bg-tertiary);
+        }
+        .action-btns {
+            display: flex;
+            gap: 8px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        .edit-form {
+            display: none;
+        }
+        .edit-form.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="settings-container">
+        <div class="settings-header">
+            <div style="display:flex;align-items:center;gap:12px">
+                <h1>项目设置</h1>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px">
+                <button class="header-link" onclick="toggleTheme()" id="themeToggle" title="切换主题">☀️</button>
+                <a href="/" class="header-link" title="返回主页">🏠</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>添加新项目</h2>
+            <form id="addProjectForm" class="form-grid">
+                <div class="form-group">
+                    <label>项目名称</label>
+                    <input type="text" id="projectName" placeholder="例如: 生产环境" required>
+                </div>
+                <div class="form-group">
+                    <label>日志目录</label>
+                    <input type="text" id="projectLogDir" placeholder="例如: logs/prod" required>
+                </div>
+                <div class="form-group full-width">
+                    <label>索引文件</label>
+                    <input type="text" id="projectIndexFile" placeholder="例如: logs/prod/time_ranges.json" value="time_ranges.json">
+                </div>
+                <div class="btn-group full-width">
+                    <button type="button" class="btn btn-secondary" onclick="clearForm()">清空</button>
+                    <button type="submit" class="btn btn-primary">添加项目</button>
+                    <button type="reset" class="btn btn-secondary">重置</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>项目列表</h2>
+            <div id="projectsList">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📁</div>
+                    <p>暂无项目，请添加</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        async function loadProjects() {
+            try {
+                const res = await fetch('/api/projects');
+                const data = await res.json();
+                renderProjects(data.projects || []);
+            } catch (e) {
+                showToast('加载项目失败: ' + e.message);
+            }
+        }
+
+        function renderProjects(projects) {
+            const container = document.getElementById('projectsList');
+            
+            if (!projects || projects.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📁</div>
+                        <p>暂无项目，请添加</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <table class="projects-table">
+                    <thead>
+                        <tr>
+                            <th>项目名称</th>
+                            <th>日志目录</th>
+                            <th>索引文件</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${projects.map(p => `
+                            <tr>
+                                <td>${escapeHtml(p.name)}</td>
+                                <td>${escapeHtml(p.log_dir)}</td>
+                                <td>${escapeHtml(p.index_file || '')}</td>
+                                 <td>
+                                     <div class="action-btns">
+                                         <button class="btn btn-secondary btn-sm" onclick="editProject('${p.id}', '${escapeHtml(p.name)}', '${(p.log_dir || '').replace(/\\/g, '\\\\')}', '${escapeHtml(p.index_file || '')}')">编辑</button>
+                                         <button class="btn btn-primary btn-sm" onclick="generateIndex('${p.id}', '${(p.log_dir || '').replace(/\\/g, '\\\\')}', '${escapeHtml(p.index_file || '')}')">生成</button>
+                                         <button class="btn btn-danger btn-sm" onclick="deleteProject('${p.id}')">删除</button>
+                                     </div>
+                                 </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        document.getElementById('addProjectForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const project = {
+                name: document.getElementById('projectName').value.trim(),
+                log_dir: document.getElementById('projectLogDir').value.trim(),
+                index_file: document.getElementById('projectIndexFile').value.trim()
+            };
+
+            try {
+                const res = await fetch('/api/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(project)
+                });
+                
+                if (!res.ok) throw new Error('添加失败');
+                
+                showToast('项目添加成功');
+                e.target.reset();
+                loadProjects();
+            } catch (e) {
+                showToast('添加失败: ' + e.message);
+            }
+        });
+
+        let editingId = null;
+
+        function editProject(id, name, logDir, indexFile) {
+            if (editingId) {
+                showToast('请先保存当前编辑');
+                return;
+            }
+            
+            editingId = id;
+            document.getElementById('projectName').value = name;
+            document.getElementById('projectLogDir').value = logDir;
+            document.getElementById('projectIndexFile').value = indexFile;
+            
+            const btn = document.querySelector('#addProjectForm button[type="submit"]');
+            btn.textContent = '保存修改';
+            btn.onclick = async (e) => {
+                e.preventDefault();
+                await updateProject();
+            };
+            
+            showToast('编辑模式 - 修改后点击保存');
+        }
+
+        async function updateProject() {
+            if (!editingId) return;
+            
+            const project = {
+                id: editingId,
+                name: document.getElementById('projectName').value.trim(),
+                log_dir: document.getElementById('projectLogDir').value.trim(),
+                index_file: document.getElementById('projectIndexFile').value.trim()
+            };
+
+            try {
+                const res = await fetch('/api/projects', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(project)
+                });
+                
+                if (!res.ok) throw new Error('更新失败');
+                
+                showToast('项目更新成功');
+                cancelEdit();
+                loadProjects();
+            } catch (e) {
+                showToast('更新失败: ' + e.message);
+            }
+        }
+
+        function cancelEdit() {
+            editingId = null;
+            document.getElementById('addProjectForm').reset();
+            const btn = document.querySelector('#addProjectForm button[type="submit"]');
+            btn.textContent = '添加项目';
+            btn.onclick = null;
+            document.getElementById('projectIndexFile').value = 'time_ranges.json';
+        }
+
+        function clearForm() {
+            if (editingId) {
+                cancelEdit();
+            }
+            document.getElementById('projectName').value = '';
+            document.getElementById('projectLogDir').value = '';
+            document.getElementById('projectIndexFile').value = 'time_ranges.json';
+        }
+
+        async function generateIndex(id, logDir, indexFile) {
+            if (!confirm('确定要生成索引文件吗？这可能需要一些时间。')) return;
+            
+            try {
+                showToast('正在生成索引...');
+                const res = await fetch('/api/generate_index', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: id,
+                        log_dir: logDir,
+                        index_file: indexFile
+                    })
+                });
+                
+                if (!res.ok) throw new Error('生成失败');
+                
+                const result = await res.json();
+                showToast('索引生成成功: ' + (result.message || '完成'));
+            } catch (e) {
+                showToast('生成失败: ' + e.message);
+            }
+        }
+
+        async function deleteProject(id) {
+            if (!confirm('确定要删除此项目吗？')) return;
+            
+            try {
+                const res = await fetch(`/api/projects?id=${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!res.ok) throw new Error('删除失败');
+                
+                showToast('项目已删除');
+                loadProjects();
+            } catch (e) {
+                showToast('删除失败: ' + e.message);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('light-mode');
+            const isLight = document.body.classList.contains('light-mode');
+            document.getElementById('themeToggle').textContent = isLight ? '🌙' : '☀️';
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        }
+
+        function loadTheme() {
+            const saved = localStorage.getItem('theme');
+            if (saved === 'light') {
+                document.body.classList.add('light-mode');
+                document.getElementById('themeToggle').textContent = '🌙';
+            }
+        }
+
+        loadTheme();
+        loadProjects();
+    </script>
+</body>
+</html>
