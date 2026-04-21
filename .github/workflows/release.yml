@@ -19,13 +19,33 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Build
+      - name: Build for Windows
         run: |
-          go build -o log-server.exe -ldflags "-s -w" .
+          go build -o log-server-windows-amd64.exe -ldflags "-s -w" .
+        env:
+          GOOS: windows
+          GOARCH: amd64
+
+      - name: Build for Linux
+        run: |
+          go build -o log-server-linux-amd64 -ldflags "-s -w" .
+        env:
+          GOOS: linux
+          GOARCH: amd64
+
+      - name: Build for macOS
+        run: |
+          go build -o log-server-darwin-amd64 -ldflags "-s -w" .
+        env:
+          GOOS: darwin
+          GOARCH: amd64
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         with:
-          files: log-server.exe
+          files: |
+            log-server-windows-amd64.exe
+            log-server-linux-amd64
+            log-server-darwin-amd64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
